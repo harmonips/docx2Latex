@@ -14,6 +14,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QMimeData
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPalette, QFont
 
+# Import du logger
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.logger import logger
+
 
 class FileDropZone(QFrame):
     """
@@ -44,6 +49,10 @@ class FileDropZone(QFrame):
         self.file_filter = file_filter
         self.extensions = extensions or []
         self.current_file = ""
+        
+        # Log de l'initialisation
+        logger.info(f"Creating FileDropZone: {title}")
+        logger.debug(f"Extensions allowed: {self.extensions}")
         
         self.setup_ui()
         self.setup_drag_drop()
@@ -106,33 +115,46 @@ class FileDropZone(QFrame):
         
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """Gère l'entrée du drag"""
+        logger.ui_action("DRAG_ENTER", f"Zone: {self.title}")
+        
         if event.mimeData().hasUrls():
             # Vérifier si c'est un fichier valide
             urls = event.mimeData().urls()
             if len(urls) == 1 and urls[0].isLocalFile():
                 file_path = urls[0].toLocalFile()
+                logger.debug(f"Dragged file: {file_path}")
+                
                 if self.is_valid_file(file_path):
                     event.acceptProposedAction()
                     self.setStyleSheet("QFrame { border: 2px solid #4CAF50; background-color: #E8F5E8; }")
+                    logger.ui_action("DRAG_ACCEPTED", f"File: {Path(file_path).name}")
                     return
+                else:
+                    logger.ui_action("DRAG_REJECTED", f"Invalid file: {Path(file_path).name}")
         
         event.ignore()
         
     def dragLeaveEvent(self, event) -> None:
         """Gère la sortie du drag"""
+        logger.ui_action("DRAG_LEAVE", f"Zone: {self.title}")
         self.setStyleSheet("")
         
     def dropEvent(self, event: QDropEvent) -> None:
         """Gère le drop du fichier"""
+        logger.ui_action("DROP_EVENT", f"Zone: {self.title}")
         self.setStyleSheet("")
         
         urls = event.mimeData().urls()
         if urls and urls[0].isLocalFile():
             file_path = urls[0].toLocalFile()
+            logger.file_operation("DROP", file_path)
+            
             if self.is_valid_file(file_path):
                 self.set_file(file_path)
                 event.acceptProposedAction()
+                logger.ui_action("DROP_SUCCESS", f"File accepted: {Path(file_path).name}")
             else:
+                logger.ui_action("DROP_FAILED", f"Invalid file: {Path(file_path).name}")
                 self.show_invalid_file_message(file_path)
                 
     def is_valid_file(self, file_path: str) -> bool:
@@ -146,38 +168,55 @@ class FileDropZone(QFrame):
             bool: True si le fichier/dossier est valide
         """
         path = Path(file_path)
+        logger.debug(f"Validating: {file_path}")
         
         # Pour les dossiers (templates)
         if "Folder" in self.title or "Template" in self.title:
             if not path.is_dir():
+                logger.validation(f"Template folder", False, "Not a directory")
                 return False
             # Vérifier la présence d'un fichier template.tex
             template_file = path / "template.tex"
-            return template_file.is_file()
+            is_valid = template_file.is_file()
+            logger.validation(f"Template folder ({path.name})", is_valid, 
+                            "template.tex not found" if not is_valid else "")
+            return is_valid
         
         # Pour les fichiers normaux
         if not path.is_file():
+            logger.validation(f"File ({path.name})", False, "Not a file")
             return False
             
         if not self.extensions:
+            logger.validation(f"File ({path.name})", True, "No extension filter")
             return True
             
         file_ext = path.suffix.lower()
-        return file_ext in [ext.lower() for ext in self.extensions]
+        is_valid = file_ext in [ext.lower() for ext in self.extensions]
+        logger.validation(f"File ({path.name})", is_valid, 
+                        f"Extension {file_ext} not in {self.extensions}" if not is_valid else "")
+        return is_valid
         
     def browse_file(self) -> None:
         """Ouvre le dialog de sélection de fichier ou dossier"""
+        logger.ui_action("BROWSE_CLICKED", f"Zone: {self.title}")
+        
         if "Folder" in self.title or "Template" in self.title:
             # Sélection de dossier pour les templates
+            logger.debug("Opening folder dialog")
             folder_path = QFileDialog.getExistingDirectory(
                 self,
                 f"Select {self.title.lower()}",
                 ""
             )
             if folder_path:
+                logger.file_operation("BROWSE_FOLDER_SELECTED", folder_path)
                 self.set_file(folder_path)
+            else:
+                logger.ui_action("BROWSE_CANCELLED", "Folder selection")
         else:
             # Sélection de fichier normal
+            logger.debug(f"Opening file dialog with filter: {self.file_filter}")
             file_path, _ = QFileDialog.getOpenFileName(
                 self,
                 f"Select {self.title.lower()}",
@@ -185,7 +224,10 @@ class FileDropZone(QFrame):
                 self.file_filter
             )
             if file_path:
+                logger.file_operation("BROWSE_FILE_SELECTED", file_path)
                 self.set_file(file_path)
+            else:
+                logger.ui_action("BROWSE_CANCELLED", "File selection")
             
     def set_file(self, file_path: str) -> None:
         """
@@ -194,6 +236,7 @@ class FileDropZone(QFrame):
         Args:
             file_path (str): Chemin du fichier
         """
+        logger.file_operation("SET_FILE", file_path)
         self.current_file = file_path
         file_name = Path(file_path).name
         
@@ -214,10 +257,14 @@ class FileDropZone(QFrame):
         self.clear_button.setVisible(True)
         
         # Émettre le signal
+        logger.ui_action("FILE_SELECTED_SIGNAL", f"Zone: {self.title}, File: {file_name}")
         self.file_selected.emit(file_path)
         
     def clear_file(self) -> None:
         """Efface le fichier sélectionné"""
+        logger.ui_action("CLEAR_CLICKED", f"Zone: {self.title}")
+        old_file = self.current_file
+        
         self.current_file = ""
         self.file_display.setText("Drop a file here or click Browse")
         self.file_display.setStyleSheet("""
@@ -231,6 +278,8 @@ class FileDropZone(QFrame):
             }
         """)
         self.clear_button.setVisible(False)
+        
+        logger.file_operation("CLEAR_FILE", old_file if old_file else "None")
         self.file_selected.emit("")
         
     def get_file_path(self) -> str:
@@ -249,6 +298,8 @@ class FileDropZone(QFrame):
         Args:
             file_path (str): Chemin du fichier/dossier invalide
         """
+        logger.ui_action("SHOW_ERROR_MESSAGE", f"Invalid file: {Path(file_path).name}")
+        
         if "Folder" in self.title or "Template" in self.title:
             QMessageBox.warning(
                 self,

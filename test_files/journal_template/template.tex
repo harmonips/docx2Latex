@@ -1,0 +1,59 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% Medical journal specific packages
+\usepackage{natbib}
+\usepackage{lineno}
+\usepackage{setspace}
+
+% Journal formatting
+\linenumbers
+\doublespacing
+
+% Metadata placeholders
+\title{{{TITLE}}}
+\author{{{AUTHORS}}}
+\date{\today}
+
+% Journal header info
+\newcommand{\journalname}{Medical Research Journal}
+\newcommand{\volume}{Vol. X}
+\newcommand{\issue}{Issue Y}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+{{ABSTRACT}}
+\end{abstract}
+
+\section*{Keywords}
+{{KEYWORDS}}
+
+\section*{Abbreviations}
+{{ABBREVIATIONS}}
+
+{{CONTENT}}
+
+\section*{Acknowledgments}
+{{ACKNOWLEDGMENTS}}
+
+\section*{Funding}
+{{FUNDING}}
+
+\section*{Conflict of Interest}
+{{CONFLICTS}}
+
+\bibliographystyle{vancouver}
+\bibliography{references}
+
+\end{document}

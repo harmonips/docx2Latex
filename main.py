@@ -23,6 +23,7 @@ from PyQt6.QtCore import Qt
 sys.path.insert(0, str(Path(__file__).parent))
 
 from ui.main_window import MainWindow
+from utils.logger import logger
 
 
 def load_config() -> dict:
@@ -81,18 +82,29 @@ def main():
     app.setApplicationVersion("1.0.0")
     app.setOrganizationName("harmonips")
     
+    logger.info("=== APPLICATION STARTUP ===")
+    logger.info("Qt Application created")
+    
     # Charger la configuration
     config = load_config()
+    logger.info("Configuration loaded successfully")
     
     # Vérifier les dépendances
-    check_dependencies()
+    deps_ok = check_dependencies()
+    logger.info(f"Dependencies check: {'OK' if deps_ok else 'FAILED'}")
     
     # Créer et afficher la fenêtre principale
+    logger.info("Creating main window...")
     main_window = MainWindow(config)
     main_window.show()
+    logger.info("Main window displayed")
+    logger.info("=== APPLICATION READY FOR USER INTERACTION ===")
     
     # Démarrer la boucle d'événements
-    sys.exit(app.exec())
+    logger.info("Starting Qt event loop...")
+    exit_code = app.exec()
+    logger.info(f"Application exited with code: {exit_code}")
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

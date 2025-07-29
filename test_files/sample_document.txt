@@ -1,0 +1,4 @@
+Test file to simulate a DOCX document.
+This would normally be a Word document (.docx) file.
+
+For testing purposes, we'll use this as a placeholder until we can test with real DOCX files.

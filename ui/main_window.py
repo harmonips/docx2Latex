@@ -18,6 +18,11 @@ from PyQt6.QtGui import QFont, QIcon, QAction
 
 from .widgets import FileDropZone, StatusBar
 
+# Import du logger
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.logger import logger
+
 
 class MainWindow(QMainWindow):
     """
@@ -44,9 +49,16 @@ class MainWindow(QMainWindow):
             "is_ready": False
         }
         
+        # Log de l'initialisation
+        logger.info("=== DOCX2LATEX APPLICATION STARTING ===")
+        logger.info(f"Version: {config['app']['version']}")
+        logger.info(f"Author: {config['app']['author']}")
+        
         self.setup_ui()
         self.setup_connections()
         self.apply_config()
+        
+        logger.info("Main window initialized successfully")
         
     def setup_ui(self) -> None:
         """Configure l'interface utilisateur"""
@@ -350,7 +362,12 @@ class MainWindow(QMainWindow):
         Args:
             file_path (str): Chemin du fichier DOCX
         """
+        old_file = self.project_data["docx_file"]
         self.project_data["docx_file"] = file_path
+        logger.state_change("DOCX_FILE", 
+                          Path(old_file).name if old_file else "None",
+                          Path(file_path).name if file_path else "None")
+        
         self.update_ui_state()
         if file_path:
             self.status_bar.update_status(f"DOCX file selected: {Path(file_path).name}")
@@ -364,7 +381,12 @@ class MainWindow(QMainWindow):
         Args:
             file_path (str): Chemin du dossier template
         """
+        old_folder = self.project_data["template_folder"]
         self.project_data["template_folder"] = file_path
+        logger.state_change("TEMPLATE_FOLDER", 
+                          Path(old_folder).name if old_folder else "None",
+                          Path(file_path).name if file_path else "None")
+        
         self.update_ui_state()
         if file_path:
             self.status_bar.update_status(f"Template selected: {Path(file_path).name}")
@@ -378,7 +400,12 @@ class MainWindow(QMainWindow):
         Args:
             file_path (str): Chemin du fichier BibTeX
         """
+        old_file = self.project_data["bibtex_file"]
         self.project_data["bibtex_file"] = file_path
+        logger.state_change("BIBTEX_FILE", 
+                          Path(old_file).name if old_file else "None",
+                          Path(file_path).name if file_path else "None")
+        
         self.update_ui_state()
         if file_path:
             self.status_bar.update_status(f"BibTeX selected: {Path(file_path).name}")
@@ -391,52 +418,77 @@ class MainWindow(QMainWindow):
         template_ok = bool(self.project_data["template_folder"])
         bibtex_ok = bool(self.project_data["bibtex_file"])
         
+        logger.state_change("UI_STATE", 
+                          f"Files: {sum([docx_ok, template_ok, bibtex_ok])}/3",
+                          f"DOCX:{docx_ok}, Template:{template_ok}, BibTeX:{bibtex_ok}")
+        
         # Mettre à jour les indicateurs
         self.status_bar.update_indicators(docx_ok, template_ok, bibtex_ok)
         
         # Activer le bouton d'analyse si tous les fichiers sont présents
         all_files_ready = docx_ok and template_ok and bibtex_ok
+        old_ready_state = self.project_data["is_ready"]
+        self.project_data["is_ready"] = all_files_ready
         self.analyze_button.setEnabled(all_files_ready)
+        
+        if old_ready_state != all_files_ready:
+            logger.state_change("ANALYZE_BUTTON", 
+                              "disabled" if not old_ready_state else "enabled",
+                              "enabled" if all_files_ready else "disabled")
         
         if all_files_ready:
             self.status_bar.update_status("✅ All files ready - Click 'Analyze'")
+            logger.info(">>> ALL FILES READY - USER CAN CLICK ANALYZE <<<")
         elif not any([docx_ok, template_ok, bibtex_ok]):
             self.status_bar.update_status("Select your files to get started")
             
     def analyze_files(self) -> None:
         """Lance l'analyse des fichiers sélectionnés"""
+        logger.ui_action("ANALYZE_BUTTON_CLICKED", "Starting file analysis")
+        logger.info("=== ANALYSIS PHASE STARTING ===")
+        logger.info(f"DOCX: {self.project_data['docx_file']}")
+        logger.info(f"Template: {self.project_data['template_folder']}")
+        logger.info(f"BibTeX: {self.project_data['bibtex_file']}")
+        
         self.status_bar.update_status("🔍 Analysis in progress...")
         self.progress_bar.setVisible(True)
         
         # TODO: Implémenter l'analyse réelle
         # Pour l'instant, simulation
         self.progress_bar.setValue(0)
+        logger.info("Starting analysis simulation...")
         
         # Simuler l'analyse (à remplacer par la vraie logique)
         QTimer.singleShot(1000, self.on_analysis_complete)
         
     def on_analysis_complete(self) -> None:
         """Callback appelé quand l'analyse est terminée"""
+        logger.info("=== ANALYSIS PHASE COMPLETED ===")
         self.progress_bar.setValue(100)
         self.progress_bar.setVisible(False)
         
         # Afficher les onglets d'édition
         self.tabs_widget.setVisible(True)
+        logger.state_change("TABS_WIDGET", "hidden", "visible")
         
         # Activer les boutons suivants
         self.generate_button.setEnabled(True)
+        logger.state_change("GENERATE_BUTTON", "disabled", "enabled")
         
         self.status_bar.update_status("✅ Analysis complete - You can edit the content")
+        logger.info(">>> ANALYSIS COMPLETE - USER CAN EDIT CONTENT <<<")
         
         # TODO: Remplir les éditeurs avec le contenu analysé
         
     def generate_latex(self) -> None:
         """Génère le fichier LaTeX"""
+        logger.ui_action("GENERATE_BUTTON_CLICKED", "Starting LaTeX generation")
         self.status_bar.update_status("📄 Generating LaTeX...")
         # TODO: Implémenter la génération LaTeX
         
     def compile_pdf(self) -> None:
         """Compile le PDF"""
+        logger.ui_action("COMPILE_BUTTON_CLICKED", "Starting PDF compilation")
         self.status_bar.update_status("🔧 Compiling PDF...")
         # TODO: Implémenter la compilation PDF
         
