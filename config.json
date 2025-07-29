@@ -1,0 +1,29 @@
+{
+    "app": {
+        "name": "docx2LaTeX",
+        "version": "1.0.0",
+        "author": "harmonips"
+    },
+    "pandoc": {
+        "executable": "pandoc",
+        "input_format": "docx",
+        "output_format": "markdown",
+        "extra_args": ["--extract-media=./media", "--wrap=none"]
+    },
+    "latex": {
+        "compiler": "pdflatex",
+        "template_folder": "./templates",
+        "default_template": "article_default"
+    },
+    "ui": {
+        "window_width": 1200,
+        "window_height": 800,
+        "font_family": "Segoe UI",
+        "font_size": 10
+    },
+    "project": {
+        "auto_save_interval": 300,
+        "backup_count": 5,
+        "default_save_location": "./projects"
+    }
+}
