@@ -25,6 +25,187 @@ from utils.logger import logger
 
 
 class MainWindow(QMainWindow):
+    def export_all_references_to_bib(self, references_list: list, bibtex_path: str, output_dir: Path):
+        """
+        Pour chaque référence extraite, cherche l'entrée correspondante dans le .bib source (par DOI puis titre),
+        et écrit toutes les entrées trouvées dans references.bib avec la clé = numéro d'apparition (1,2,3,...).
+        Ne duplique pas les entrées déjà ajoutées.
+        """
+        import re
+        bib_content = ""
+        log_lines = []
+        try:
+            with open(bibtex_path, "r", encoding="utf-8") as f:
+                bib_content = f.read()
+            log_lines.append(f"[INFO] BibTeX file loaded: {bibtex_path}")
+        except Exception as e:
+            self.status_bar.update_status(f"❌ Could not read BibTeX file: {e}")
+            log_lines.append(f"[ERROR] Could not read BibTeX file: {e}")
+            self._write_export_log(output_dir, log_lines)
+            return
+
+        entries = []
+        seen_dois = set()
+        seen_titles = set()
+        # DEBUG: dump all extracted references and BibTeX file size
+        debug_lines = [
+            f"[DEBUG] BibTeX file: {bibtex_path}",
+            f"[DEBUG] BibTeX file size: {len(bib_content)} chars",
+            f"[DEBUG] Number of extracted references: {len(references_list)}",
+            f"[DEBUG] Extracted references list:",
+        ]
+        for i, ref in enumerate(references_list, 1):
+            debug_lines.append(f"  {i}: {ref}")
+        debug_lines.append("[DEBUG] --- Begin export loop ---")
+        for idx, ref_text in enumerate(references_list, 1):
+            bib_entry = None
+            log_lines.append(f"[INFO] Processing reference {idx}: {ref_text}")
+            # Match by DOI
+            doi_match = re.search(r"doi:([\w./-]+)", ref_text, re.IGNORECASE)
+            if doi_match:
+                doi = doi_match.group(1)
+                log_lines.append(f"[DEBUG] Found DOI in reference {idx}: {doi}")
+                if doi in seen_dois:
+                    log_lines.append(f"[SKIP] Reference {idx}: DOI {doi} already exported.")
+                    continue
+                bib_entry_re = re.compile(r'@\w+\{[^@]*doi\s*=\s*[{\"]?%s[}\"]?[^@]*\}' % re.escape(doi), re.IGNORECASE|re.DOTALL)
+                bib_entry_match = bib_entry_re.search(bib_content)
+                if bib_entry_match:
+                    bib_entry = bib_entry_match.group(0)
+                    seen_dois.add(doi)
+                    log_lines.append(f"[OK] Reference {idx}: Matched by DOI {doi}.")
+                else:
+                    log_lines.append(f"[FAIL] Reference {idx}: DOI {doi} not found in BibTeX.")
+            # Else, match by title
+            if not bib_entry:
+                title_match = re.search(r"\. ([*\"]?)([A-Za-z0-9 ,:;\-\(\)\&\'\*]+)[*\"]?\. \d{4}", ref_text)
+                if title_match:
+                    title = title_match.group(2).strip()
+                    log_lines.append(f"[DEBUG] Found title in reference {idx}: '{title}'")
+                    if title.lower() in seen_titles:
+                        log_lines.append(f"[SKIP] Reference {idx}: Title '{title}' already exported.")
+                        continue
+                    bib_entry_re = re.compile(r'@\w+\{[^@]*title\s*=\s*[{\"]?[^@{\n]*%s[^@{\n]*[}\"]?[^@]*\}' % re.escape(title), re.IGNORECASE|re.DOTALL)
+                    bib_entry_match = bib_entry_re.search(bib_content)
+                    if bib_entry_match:
+                        bib_entry = bib_entry_match.group(0)
+                        seen_titles.add(title.lower())
+                        log_lines.append(f"[OK] Reference {idx}: Matched by title '{title}'.")
+                    else:
+                        log_lines.append(f"[FAIL] Reference {idx}: Title '{title}' not found in BibTeX.")
+                else:
+                    log_lines.append(f"[DEBUG] No title found in reference {idx}.")
+            if bib_entry:
+                # Replace key with refXXX (e.g. ref001, ref002, ...)
+                ref_key = f"ref{idx:03d}"
+                log_lines.append(f"[DEBUG] Replacing BibTeX key with {ref_key} for reference {idx}.")
+                def repl_key(m):
+                    return f"{m.group(1)}{ref_key},"
+                bib_entry = re.sub(r"(@\w+\{)[^,]+,", repl_key, bib_entry, count=1)
+                entries.append(bib_entry)
+                log_lines.append(f"[EXPORT] Reference {idx}: Exported as {ref_key} to references.bib.")
+            else:
+                self.status_bar.update_status(f"❌ Reference {idx} not found in BibTeX file.")
+                log_lines.append(f"[ERROR] Reference {idx}: No match found in BibTeX for:\n{ref_text}\n---")
+            debug_lines.append(f"[DEBUG] After ref {idx}: entries={len(entries)}, seen_dois={list(seen_dois)}, seen_titles={list(seen_titles)}")
+
+        debug_lines.append(f"[DEBUG] --- End export loop ---")
+        debug_lines.append(f"[DEBUG] Total entries exported: {len(entries)}")
+        if not entries:
+            self.status_bar.update_status("❌ No references exported to references.bib")
+            log_lines.append("[ERROR] No references exported to references.bib")
+            self._write_export_log(output_dir, log_lines)
+            # Write debug log
+            try:
+                debug_path = output_dir / "references_debug.log"
+                with open(debug_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(debug_lines) + "\n")
+                    f.flush()
+            except Exception:
+                pass
+            return
+        bib_out = output_dir / "references.bib"
+        try:
+            with open(bib_out, "w", encoding="utf-8") as f:
+                f.write("% LOG: BibTeX export at end of script\n")
+                f.write("\n\n".join(entries) + "\n")
+                f.flush()
+            self.status_bar.update_status(f"✅ {len(entries)} references exported to {bib_out}")
+            log_lines.append(f"[SUCCESS] {len(entries)} references exported to {bib_out}")
+        except Exception as e:
+            self.status_bar.update_status(f"❌ Could not write references.bib: {e}")
+            log_lines.append(f"[ERROR] Could not write references.bib: {e}")
+        self._write_export_log(output_dir, log_lines)
+        # Write debug log
+        try:
+            debug_path = output_dir / "references_debug.log"
+            with open(debug_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(debug_lines) + "\n")
+                f.flush()
+        except Exception:
+            pass
+
+    def _write_export_log(self, output_dir: Path, log_lines: list):
+        """Écrit un fichier log détaillé de l'export des références."""
+        try:
+            log_path = output_dir / "references_export.log"
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(log_lines) + "\n")
+                f.flush()
+        except Exception as e:
+            # Logging failure is not critical for the main workflow
+            pass
+    def export_single_reference_to_bib(self, ref_number: int, ref_text: str, bibtex_path: str, output_dir: Path):
+        """
+        Extrait la référence correspondante du gros .bib et la copie dans references.bib avec la clé = numéro.
+        - ref_number: numéro de la référence (ex: 8)
+        - ref_text: texte de la référence extraite du markdown
+        - bibtex_path: chemin du gros fichier .bib
+        - output_dir: dossier où écrire references.bib
+        """
+        import re
+        bib_content = ""
+        try:
+            with open(bibtex_path, "r", encoding="utf-8") as f:
+                bib_content = f.read()
+        except Exception as e:
+            self.status_bar.update_status(f"❌ Could not read BibTeX file: {e}")
+            return
+
+        # Essayer de matcher par DOI
+        doi_match = re.search(r"doi:([\w./-]+)", ref_text, re.IGNORECASE)
+        bib_entry = None
+        if doi_match:
+            doi = doi_match.group(1)
+            bib_entry_re = re.compile(r"@\w+\{[^@]*doi\s*=\s*[{\"]?%s[}\"]?[^@]*\}" % re.escape(doi), re.IGNORECASE|re.DOTALL)
+            bib_entry = bib_entry_re.search(bib_content)
+
+        # Sinon, essayer de matcher par titre (plus risqué)
+        if not bib_entry:
+            # Extraire le titre entre guillemets ou italique
+            title_match = re.search(r"\. ([*\"]?)([A-Za-z0-9 ,:;\-\(\)\&\'\*]+)[*\"]?\. \d{4}", ref_text)
+            if title_match:
+                title = title_match.group(2).strip()
+                # Chercher le titre dans le .bib (simplifié)
+                bib_entry_re = re.compile(r"@\w+\{[^@]*title\s*=\s*[{\"]?[^@{\n]*%s[^@{\n]*[}\"]?[^@]*\}" % re.escape(title), re.IGNORECASE|re.DOTALL)
+                bib_entry = bib_entry_re.search(bib_content)
+
+        if not bib_entry:
+            self.status_bar.update_status(f"❌ Reference {ref_number} not found in BibTeX file.")
+            return
+
+        entry = bib_entry.group(0)
+        # Remplacer la clé par le numéro
+        entry = re.sub(r"(@\w+\{)[^,]+,", r"\1%d," % ref_number, entry, count=1)
+
+        # Écrire dans references.bib
+        bib_out = output_dir / "references.bib"
+        try:
+            with open(bib_out, "w", encoding="utf-8") as f:
+                f.write(entry + "\n")
+            self.status_bar.update_status(f"✅ Reference {ref_number} exported to {bib_out}")
+        except Exception as e:
+            self.status_bar.update_status(f"❌ Could not write references.bib: {e}")
     """
     Fenêtre principale de l'application docx2LaTeX
     
@@ -486,14 +667,28 @@ class MainWindow(QMainWindow):
                     md_content = f.read()
                 self.content_editor.setPlainText(md_content)
 
-                # Extraction des références
-                references = self.extract_references_from_markdown(md_content)
-                if references.strip():
-                    self.references_editor.setPlainText(references.strip())
+                # Extraction des références individuelles
+                references_block = self.extract_references_from_markdown(md_content)
+                references_list = self.split_references(references_block)
+                if references_list:
+                    self.references_editor.setPlainText("\n".join(ref.strip() for ref in references_list))
+                    # Générer references.bib automatiquement
+                    self.export_all_references_to_bib(
+                        references_list,
+                        self.project_data["bibtex_file"],
+                        output_dir
+                    )
                 else:
                     self.references_editor.setPlainText("No references section found.")
             except Exception as e:
                 self.status_bar.update_status("❌ Failed to load Markdown content")
+                # Log détaillé dans le dossier de sortie
+                try:
+                    log_path = output_dir / "markdown_read_error.log"
+                    with open(log_path, "w", encoding="utf-8") as logf:
+                        logf.write(f"[ERROR] Could not read Markdown file: {md_path}\nException: {e}\n")
+                except Exception:
+                    pass
                 QMessageBox.critical(self, "Read Error", f"Could not read the generated Markdown file.\n{e}")
                 return
         else:
@@ -514,21 +709,47 @@ class MainWindow(QMainWindow):
         Cherche un titre de section (## References ou ## Bibliography) et extrait jusqu'à la fin ou la prochaine section.
         """
         import re
-        # Recherche du header de références
         pattern = re.compile(r"^## +(?:References|Bibliography)\s*$", re.MULTILINE | re.IGNORECASE)
         match = pattern.search(md_content)
         if not match:
             return ""
         start = match.end()
-        # Cherche le prochain header de même niveau ou supérieur
         next_section = re.search(r"^## +.+$", md_content[start:], re.MULTILINE)
         if next_section:
             end = start + next_section.start()
         else:
             end = len(md_content)
         references_block = md_content[start:end].strip()
-        # Nettoie les éventuels espaces ou sauts de ligne initiaux
         return references_block
+
+    def split_references(self, references_block: str) -> list:
+        """
+        Découpe le bloc de références en une liste de références individuelles, dans l'ordre d'apparition.
+        Gère les formats courants :
+        - Numérotation 1. 2. 3.
+        - Numérotation [1] [2] [3]
+        - Numérotation 1) 2) 3)
+        Fonctionne même si toutes les références sont sur une seule ligne ou séparées par des retours à la ligne.
+        """
+        import re
+        if not references_block.strip():
+            return []
+        # On découpe sur chaque numéro suivi d'un séparateur, y compris '1\.' (chiffre + backslash + point)
+        # On capture le séparateur pour le remettre devant chaque référence
+        pattern = r'(?:^|\n)\s*(\d+\\\.|\d+\.|\[\d+\]|\d+\))\s+'
+        block = references_block
+        if not re.match(pattern, block):
+            block = '\n' + block
+        parts = re.split(pattern, block)
+        refs = []
+        i = 1
+        while i < len(parts):
+            sep = parts[i]
+            ref = parts[i+1] if (i+1) < len(parts) else ''
+            refs.append(f'{sep} {ref}'.strip())
+            i += 2
+        refs = [r for r in refs if r.strip()]
+        return refs
         
     def on_analysis_complete(self) -> None:
         """Callback appelé quand l'analyse est terminée"""
