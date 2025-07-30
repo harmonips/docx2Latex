@@ -449,15 +449,44 @@ class MainWindow(QMainWindow):
         logger.info(f"DOCX: {self.project_data['docx_file']}")
         logger.info(f"Template: {self.project_data['template_folder']}")
         logger.info(f"BibTeX: {self.project_data['bibtex_file']}")
-        
-        self.status_bar.update_status("🔍 Analysis in progress...")
+
+        # Vérifier que tous les fichiers nécessaires sont sélectionnés
+        docx = self.project_data["docx_file"]
+        template = self.project_data["template_folder"]
+        bibtex = self.project_data["bibtex_file"]
+        if not (docx and template and bibtex):
+            self.status_bar.update_status("❌ Please select all required files (DOCX, template, BibTeX)")
+            QMessageBox.warning(self, "Missing files", "Please select a DOCX file, a template folder, and a BibTeX file.")
+            return
+
+        # Créer le dossier de sortie sous la forme output/nomdufichierdocx
+        docx_name = Path(docx).stem
+        output_dir = Path.cwd() / "output" / docx_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.status_bar.update_status(f"📁 Output directory created: {output_dir}")
+
+        # Étape Pandoc : conversion DOCX → Markdown
+        import subprocess
+        md_path = output_dir / "content.md"
+        try:
+            result = subprocess.run([
+                "pandoc", str(docx), "-o", str(md_path), "--wrap=none"
+            ], capture_output=True, text=True, check=True)
+        except Exception as e:
+            self.status_bar.update_status("❌ Pandoc conversion failed")
+            QMessageBox.critical(self, "Pandoc Error", f"Pandoc failed to convert DOCX to Markdown.\n{e}")
+            return
+        if md_path.exists():
+            self.status_bar.update_status(f"✅ DOCX converted to Markdown: {md_path}")
+        else:
+            self.status_bar.update_status("❌ Pandoc did not produce Markdown output")
+            QMessageBox.critical(self, "Pandoc Error", "Pandoc did not produce the expected Markdown file.")
+            return
+
         self.progress_bar.setVisible(True)
-        
-        # TODO: Implémenter l'analyse réelle
-        # Pour l'instant, simulation
         self.progress_bar.setValue(0)
         logger.info("Starting analysis simulation...")
-        
+
         # Simuler l'analyse (à remplacer par la vraie logique)
         QTimer.singleShot(1000, self.on_analysis_complete)
         
