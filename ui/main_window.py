@@ -478,13 +478,20 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Pandoc Error", f"Pandoc failed to convert DOCX to Markdown.\n{e}")
             return
 
-        # Charger le Markdown
+        # Charger le Markdown et extraire les références
         if md_path.exists():
             self.status_bar.update_status(f"✅ DOCX converted to Markdown: {md_path}")
             try:
                 with open(md_path, "r", encoding="utf-8") as f:
                     md_content = f.read()
                 self.content_editor.setPlainText(md_content)
+
+                # Extraction des références
+                references = self.extract_references_from_markdown(md_content)
+                if references.strip():
+                    self.references_editor.setPlainText(references.strip())
+                else:
+                    self.references_editor.setPlainText("No references section found.")
             except Exception as e:
                 self.status_bar.update_status("❌ Failed to load Markdown content")
                 QMessageBox.critical(self, "Read Error", f"Could not read the generated Markdown file.\n{e}")
@@ -500,6 +507,28 @@ class MainWindow(QMainWindow):
 
         # Simuler l'analyse (à remplacer par la vraie logique)
         QTimer.singleShot(1000, self.on_analysis_complete)
+
+    def extract_references_from_markdown(self, md_content: str) -> str:
+        """
+        Extrait la section Références/Bibliographie du Markdown.
+        Cherche un titre de section (## References ou ## Bibliography) et extrait jusqu'à la fin ou la prochaine section.
+        """
+        import re
+        # Recherche du header de références
+        pattern = re.compile(r"^## +(?:References|Bibliography)\s*$", re.MULTILINE | re.IGNORECASE)
+        match = pattern.search(md_content)
+        if not match:
+            return ""
+        start = match.end()
+        # Cherche le prochain header de même niveau ou supérieur
+        next_section = re.search(r"^## +.+$", md_content[start:], re.MULTILINE)
+        if next_section:
+            end = start + next_section.start()
+        else:
+            end = len(md_content)
+        references_block = md_content[start:end].strip()
+        # Nettoie les éventuels espaces ou sauts de ligne initiaux
+        return references_block
         
     def on_analysis_complete(self) -> None:
         """Callback appelé quand l'analyse est terminée"""
