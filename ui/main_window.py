@@ -185,16 +185,17 @@ class MainWindow(QMainWindow):
             layout (QVBoxLayout): Layout parent
         """
         self.tabs_widget = QTabWidget()
-        
-        # Onglet Métadonnées
+
+        # Onglet Métadonnées (masqué)
         metadata_widget = QWidget()
         metadata_layout = QVBoxLayout(metadata_widget)
         metadata_layout.addWidget(QLabel("Document title, authors, and metadata"))
         self.metadata_editor = QTextEdit()
         self.metadata_editor.setPlaceholderText("Extracted metadata will appear here...")
         metadata_layout.addWidget(self.metadata_editor)
-        self.tabs_widget.addTab(metadata_widget, "📝 Metadata")
-        
+        metadata_index = self.tabs_widget.addTab(metadata_widget, "📝 Metadata")
+        self.tabs_widget.setTabVisible(metadata_index, False)
+
         # Onglet Contenu
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
@@ -477,6 +478,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Pandoc Error", f"Pandoc failed to convert DOCX to Markdown.\n{e}")
             return
 
+        # Charger le Markdown
         if md_path.exists():
             self.status_bar.update_status(f"✅ DOCX converted to Markdown: {md_path}")
             try:
