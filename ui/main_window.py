@@ -476,8 +476,17 @@ class MainWindow(QMainWindow):
             self.status_bar.update_status("❌ Pandoc conversion failed")
             QMessageBox.critical(self, "Pandoc Error", f"Pandoc failed to convert DOCX to Markdown.\n{e}")
             return
+
         if md_path.exists():
             self.status_bar.update_status(f"✅ DOCX converted to Markdown: {md_path}")
+            try:
+                with open(md_path, "r", encoding="utf-8") as f:
+                    md_content = f.read()
+                self.content_editor.setPlainText(md_content)
+            except Exception as e:
+                self.status_bar.update_status("❌ Failed to load Markdown content")
+                QMessageBox.critical(self, "Read Error", f"Could not read the generated Markdown file.\n{e}")
+                return
         else:
             self.status_bar.update_status("❌ Pandoc did not produce Markdown output")
             QMessageBox.critical(self, "Pandoc Error", "Pandoc did not produce the expected Markdown file.")
